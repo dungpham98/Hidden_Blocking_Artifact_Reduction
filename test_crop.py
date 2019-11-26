@@ -20,7 +20,6 @@ def cropImg(size,img_tensor):
 	h = int(img_tensor.shape[2])
 	w = int(img_tensor.shape[3])
 	n = int(h/size)
-	print(w)
 	i = 0
 	while(i*size < h):
 		j = 0
@@ -28,7 +27,6 @@ def cropImg(size,img_tensor):
 			i_n =int(i*size)
 			j_n = int(j*size)
 			img = img_tensor[0:batch,0:channel,i_n:(i_n+size),j_n:(j_n+size)]
-			print(i_n)
 			imgs.append(img)
 			#torchvision.utils.save_image(img,"cropped"+str(i_n)+str(j_n)+".jpg")
 			j = j + 1 
@@ -40,9 +38,11 @@ def concatImgs(imgs):
 	i = 0
 	img_cat =[]
 	while(i < 16):
-		img_cat.append(torch.cat([imgs[0+i],imgs[1+i],imgs[2+i],imgs[3+i]],dim=0))
+		img_cat.append(torch.cat([imgs[0+i],imgs[1+i],imgs[2+i],imgs[3+i]],dim=3))
 		i = i + 4
-	img = torch.cat([img_cat[0],img_cat[1],img_cat[2],img_cat[3]],1)
+	print(img_cat[0].shape)
+	img = torch.cat([img_cat[0],img_cat[1],img_cat[2],img_cat[3]],2)
+	print(img.shape)
 	torchvision.utils.save_image(img,"concat"+".jpg")
 
 image = Image.open("COCO_TEST.jpg")
