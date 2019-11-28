@@ -10,27 +10,6 @@ from options import *
 from model.hidden import Hidden
 from average_meter import AverageMeter
 
-def cropImg(size,img_tensor):
-    imgs=[]
-    batch = int(img_tensor.shape[0])
-    channel = int(img_tensor.shape[1])
-    h = int(img_tensor.shape[2])
-    w = int(img_tensor.shape[3])
-    n = int(h/size)
-    print(w)
-    i = 0
-    while(i*size < h):
-        j = 0
-        while(j*size < w):
-            i_n =int(i*size)
-            j_n = int(j*size)
-            img = img_tensor[0:batch,0:channel,i_n:(i_n+size),j_n:(j_n+size)]
-            print(i_n)
-            imgs.append(img)
-            torchvision.utils.save_image(img,"cropped"+str(i_n)+str(j_n)+".jpg")
-            j = j + 1 
-        i = i + 1
-    return imgs
 
 def train(model: Hidden,
           device: torch.device,
@@ -68,7 +47,6 @@ def train(model: Hidden,
         epoch_start = time.time()
         step = 1
         for image, _ in train_data:
-            print(image.shape)
             image = image.to(device)
             message = torch.Tensor(np.random.choice([0, 1], (image.shape[0], hidden_config.message_length))).to(device)
             losses, _ = model.train_on_batch([image, message])
