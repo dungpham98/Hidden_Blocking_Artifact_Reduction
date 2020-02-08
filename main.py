@@ -99,6 +99,7 @@ def main():
                                             decoder_loss=1,
                                             encoder_loss=0.7,
                                             adversarial_loss=1e-3,
+                                            blocking_loss = 0,
                                             enable_fp16=args.enable_fp16
                                             )
 

@@ -88,23 +88,49 @@ def train(model: Hidden,
             #iterate img
             bitwise_arr=[]
             main_losses = None
+            encoded_imgs = []
             for img in imgs:
                 img=img.to(device)
                 message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], hidden_config.message_length))).to(device)
-                losses, _ = model.train_on_batch([img, message])
+                losses, (encoded_images, noised_images, decoded_messages) = model.train_on_batch([img, message])
+                encoded_imgs.append(encoded_images[0][0].detach().numpy())
                 main_losses = losses
                 for name, loss in losses.items():
                     if(name == 'bitwise-error  '):
                         bitwise_arr.append(loss)
+            Total = 0
+            Vcount = 0 
+            for i in range(0,len(encoded_imgs)-1):
+                if((i+1) % 4 != 0):
+                    img = encoded_imgs[i]
+                    img_next = encoded_imgs[i+1]
+                    for j in range(0,32):
+                        distinct = np.abs(img[j][31]-img_next[j][0])
+                        Total = Total +1
+                        if(distinct > 0.5):
+                            Vcount = Vcount+1
+            Hcount = 0 
+            for i in range(0,len(encoded_imgs)-4):
+                img = encoded_imgs[i]
+                img_next = encoded_imgs[i+4]
+                for j in range(0,32):
+                    distinct = np.abs(img[31][j]-img_next[0][j])
+                    Total = Total + 1
+                    if(distinct > 0.5):
+                        Hcount = Hcount+1
 
             bitwise_arr = np.array(bitwise_arr)
             bitwise_avg = np.average(bitwise_arr)
+            blocking_loss = (Vcount+Hcount)/Total
 
             for name, loss in main_losses.items():
                 if(name == 'bitwise-error  '):
                     training_losses[name].update(bitwise_avg)
                 else:
-                    training_losses[name].update(loss)    
+                    if(name == 'blocking_effect'):
+                        training_losses[name].update(blocking_loss)
+                    else:
+                        training_losses[name].update(loss)    
 
             if step % print_each == 0 or step == steps_in_epoch:
                 logging.info(
