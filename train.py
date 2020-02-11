@@ -93,7 +93,7 @@ def train(model: Hidden,
                 img=img.to(device)
                 message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], hidden_config.message_length))).to(device)
                 losses, (encoded_images, noised_images, decoded_messages) = model.train_on_batch([img, message])
-                encoded_imgs.append(encoded_images[0][0].detach().numpy())
+                encoded_imgs.append(encoded_images[0][0].cpu().detach().numpy())
                 main_losses = losses
                 for name, loss in losses.items():
                     if(name == 'bitwise-error  '):
@@ -161,16 +161,40 @@ def train(model: Hidden,
             bitwise_arr=[]
             main_losses = None
             encoded_imgs=[]
+            blocking_imgs=[]
             for img in imgs:
                 img=img.to(device)
                 message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], hidden_config.message_length))).to(device)
                 losses, (encoded_images, noised_images, decoded_messages) = model.validate_on_batch([img, message])
                 encoded_imgs.append(encoded_images)
+                blocking_imgs .append(encoded_images[0][0].cpu().detach().numpy())
                 main_losses = losses
                 for name, loss in losses.items():
                     if(name == 'bitwise-error  '):
                         bitwise_arr.append(loss)
 
+            Total = 0
+            Vcount = 0 
+            for i in range(0,len(blocking_imgs)-1):
+                if((i+1) % 4 != 0):
+                    img = blocking_imgs[i]
+                    img_next = blocking_imgs[i+1]
+                    for j in range(0,32):
+                        distinct = np.abs(img[j][31]-img_next[j][0])
+                        Total = Total +1
+                        if(distinct > 0.5):
+                            Vcount = Vcount+1
+            Hcount = 0 
+            for i in range(0,len(blocking_imgs)-4):
+                img = blocking_imgs[i]
+                img_next = blocking_imgs[i+4]
+                for j in range(0,32):
+                    distinct = np.abs(img[31][j]-img_next[0][j])
+                    Total = Total + 1
+                    if(distinct > 0.5):
+                        Hcount = Hcount+1
+
+            blocking_loss = (Vcount+Hcount)/Total
             bitwise_arr = np.array(bitwise_arr)
             bitwise_avg = np.average(bitwise_arr)
 
@@ -178,7 +202,10 @@ def train(model: Hidden,
                 if(name == 'bitwise-error  '):
                     validation_losses[name].update(bitwise_avg)
                 else:
-                    validation_losses[name].update(loss)
+                    if(name == 'blocking_effect'):
+                        validation_losses[name].update(blocking_loss)
+                    else:
+                        validation_losses[name].update(loss)  
             #concat image
             encoded_images = concatImgs(encoded_imgs)
 
