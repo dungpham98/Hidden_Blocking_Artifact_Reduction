@@ -98,7 +98,6 @@ def train(model: Hidden,
                 for name, loss in losses.items():
                     if(name == 'bitwise-error  '):
                         bitwise_arr.append(loss)
-            #blocking effect loss
             Total = 0
             Vcount = 0
             V_average = 0
@@ -107,27 +106,43 @@ def train(model: Hidden,
                 if((i+1) % 4 != 0):
                     img = encoded_imgs[i]
                     img_next = encoded_imgs[i+1]
+                    average_img = 0
+                    average_img_next = 0
+                    for j in range(0,32):
+                        for k in range(0,10):
+                            average_img = average_img+img[j][31-k]
+                            average_img_next = average_img_next+img_next[j][k]
+                    average_blocking = np.abs(average_img-average_img_next)/320
+                    V_average = V_average+average_blocking
                     for j in range(0,32):
                         distinct = np.abs(img[j][31]-img_next[j][0])
-                        V_average = V_average+distinct
                         Total = Total +1
                         if(distinct > 0.5):
                             Vcount = Vcount+1
-
+            V_average = V_average/12
             Hcount = 0 
             for i in range(0,len(encoded_imgs)-4):
                 img = encoded_imgs[i]
                 img_next = encoded_imgs[i+4]
+                average_img = 0
+                average_img_next = 0
+                for j in range(0,32):
+                    for k in range(0,10):
+                        average_img = average_img+img[31-k][j]
+                        average_img_next = average_img_next+img_next[k][j]
+                average_blocking = np.abs(average_img-average_img_next)/320
+                H_average = H_average+average_blocking
                 for j in range(0,32):
                     distinct = np.abs(img[31][j]-img_next[0][j])
-                    H_average = H_average+distinct
                     Total = Total + 1
                     if(distinct > 0.5):
                         Hcount = Hcount+1
+            H_average = H_average/12
 
             bitwise_arr = np.array(bitwise_arr)
             bitwise_avg = np.average(bitwise_arr)
-            blocking_loss = (V_average+H_average)/(Total*2)
+            #blocking_loss = (Vcount+Hcount)/Total
+            blocking_loss = (H_average+V_average)/2
 
             for name, loss in main_losses.items():
                 if(name == 'bitwise-error  '):
@@ -179,7 +194,6 @@ def train(model: Hidden,
                     if(name == 'bitwise-error  '):
                         bitwise_arr.append(loss)
 
-            #blocking effect loss
             Total = 0
             Vcount = 0 
             V_average = 0
@@ -188,27 +202,41 @@ def train(model: Hidden,
                 if((i+1) % 4 != 0):
                     img = blocking_imgs[i]
                     img_next = blocking_imgs[i+1]
+                    average_img = 0
+                    average_img_next = 0
+                    for j in range(0,32):
+                        for k in range(0,10):
+                            average_img = average_img+img[j][31-k]
+                            average_img_next = average_img_next+img_next[j][k]
+                    average_blocking = np.abs(average_img-average_img_next)/320
+                    V_average = V_average+average_blocking
                     for j in range(0,32):
                         distinct = np.abs(img[j][31]-img_next[j][0])
-                        V_average = V_average+distinct
                         Total = Total +1
                         if(distinct > 0.5):
                             Vcount = Vcount+1
+            V_average = V_average/12
             Hcount = 0 
             for i in range(0,len(blocking_imgs)-4):
                 img = blocking_imgs[i]
                 img_next = blocking_imgs[i+4]
                 for j in range(0,32):
+                    for k in range(0,10):
+                        average_img = average_img+img[31-k][j]
+                        average_img_next = average_img_next+img_next[k][j]
+                average_blocking = np.abs(average_img-average_img_next)/320
+                H_average = H_average+average_blocking
+                for j in range(0,32):
                     distinct = np.abs(img[31][j]-img_next[0][j])
-                    H_average = H_average+distinct
                     Total = Total + 1
                     if(distinct > 0.5):
                         Hcount = Hcount+1
+            H_average = H_average/12
             
             bitwise_arr = np.array(bitwise_arr)
             bitwise_avg = np.average(bitwise_arr)
-            blocking_loss = (V_average+H_average)/(Total*2)
-
+            #blocking_loss = (Vcount+Hcount)/Total
+            blocking_loss = (H_average+V_average)/2
             for name, loss in main_losses.items():
                 if(name == 'bitwise-error  '):
                     validation_losses[name].update(bitwise_avg)
