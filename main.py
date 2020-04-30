@@ -38,9 +38,12 @@ def main():
                                 help='Use to switch on Tensorboard logging.')
     new_run_parser.add_argument('--enable-fp16', dest='enable_fp16', action='store_true',
                                 help='Enable mixed-precision training.')
-
+    new_run_parser.add_argument('--ats',default = False,type = bool,
+                                help='Enable ATS for secrecy validation.')
     new_run_parser.add_argument('--noise', nargs='*', action=NoiseArgParser,
                                 help="Noise layers configuration. Use quotes when specifying configuration, e.g. 'cropout((0.55, 0.6), (0.55, 0.6))'")
+    new_run_parser.add_argument('--out-dir',default ="HiDDeN_Enc", type=str, help='The output directory.')
+    new_run_parser.add_argument('--val-dir', type=str, help='The test folder.')
 
     new_run_parser.set_defaults(tensorboard=False)
     new_run_parser.set_defaults(enable_fp16=False)
@@ -56,6 +59,8 @@ def main():
     #                             help='Override the previous setting regarding tensorboard logging.')
 
     args = parent_parser.parse_args()
+    if(args.val_dir == None):
+        args.val_dir = os.path.join(args.data_dir, 'val')
     checkpoint = None
     loaded_checkpoint_file_name = None
 
@@ -83,10 +88,12 @@ def main():
             batch_size=args.batch_size,
             number_of_epochs=args.epochs,
             train_folder=os.path.join(args.data_dir, 'train'),
-            validation_folder=os.path.join(args.data_dir, 'val'),
+            validation_folder=args.val_dir,
             runs_folder=os.path.join('.', 'runs'),
             start_epoch=start_epoch,
-            experiment_name=args.name)
+            experiment_name=args.name,
+            ats = args.ats,
+            output_folder = args.out_dir)
 
         noise_config = args.noise if args.noise is not None else []
         hidden_config = HiDDenConfiguration(H=args.size, W=args.size,

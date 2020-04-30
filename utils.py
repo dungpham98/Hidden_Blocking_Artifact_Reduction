@@ -5,7 +5,6 @@ import csv
 import time
 import pickle
 import logging
-import cv2
 import torch
 from torchvision import datasets, transforms
 import torchvision.utils
