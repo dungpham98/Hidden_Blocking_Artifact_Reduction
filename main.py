@@ -29,6 +29,8 @@ def main():
 
     new_run_parser.add_argument('--size', '-s', default=128, type=int,
                                 help='The size of the images (images are square so this is height and width).')
+    new_run_parser.add_argument('--block_size', '-bs', default=32, type=int,
+                                help='The block size of the images (images are square so this is height and width).')
     new_run_parser.add_argument('--message', '-m', default=30, type=int, help='The length in bits of the watermark.')
     new_run_parser.add_argument('--continue-from-folder', '-c', default='', type=str,
                                 help='The folder from where to continue a previous run. Leave blank if you are starting a new experiment.')
@@ -44,6 +46,7 @@ def main():
                                 help="Noise layers configuration. Use quotes when specifying configuration, e.g. 'cropout((0.55, 0.6), (0.55, 0.6))'")
     new_run_parser.add_argument('--out-dir',default ="HiDDeN_Enc", type=str, help='The output directory.')
     new_run_parser.add_argument('--val-dir', type=str, help='The test folder.')
+    new_run_parser.add_argument('--default',default = False, type=bool, help='Load the default HiDDeN configuration.')
 
     new_run_parser.set_defaults(tensorboard=False)
     new_run_parser.set_defaults(enable_fp16=False)
@@ -93,10 +96,11 @@ def main():
             start_epoch=start_epoch,
             experiment_name=args.name,
             ats = args.ats,
+            default=args.default,
             output_folder = args.out_dir)
 
         noise_config = args.noise if args.noise is not None else []
-        hidden_config = HiDDenConfiguration(H=args.size, W=args.size,
+        hidden_config = HiDDenConfiguration(H=args.size, W=args.size,block_size=args.block_size,
                                             message_length=args.message,
                                             encoder_blocks=4, encoder_channels=64,
                                             decoder_blocks=7, decoder_channels=64,

@@ -7,7 +7,7 @@ class TrainingOptions:
                  batch_size: int,
                  number_of_epochs: int,
                  train_folder: str, validation_folder: str, runs_folder: str,
-                 start_epoch: int, experiment_name: str,ats: bool,
+                 start_epoch: int, experiment_name: str,ats: bool,default:bool,
                  output_folder:str):
         self.batch_size = batch_size
         self.number_of_epochs = number_of_epochs
@@ -17,6 +17,7 @@ class TrainingOptions:
         self.start_epoch = start_epoch
         self.experiment_name = experiment_name
         self.ats = ats
+        self.default= default
         self.output_folder = output_folder
 
 
@@ -25,7 +26,7 @@ class HiDDenConfiguration():
     The HiDDeN network configuration.
     """
 
-    def __init__(self, H: int, W: int, message_length: int,
+    def __init__(self, H: int, W: int,block_size:int, message_length: int,
                  encoder_blocks: int, encoder_channels: int,
                  decoder_blocks: int, decoder_channels: int,
                  use_discriminator: bool,
@@ -38,6 +39,7 @@ class HiDDenConfiguration():
                  enable_fp16: bool = False):
         self.H = H
         self.W = W
+        self.block_size = block_size
         self.message_length = message_length
         self.encoder_blocks = encoder_blocks
         self.encoder_channels = encoder_channels
@@ -50,5 +52,5 @@ class HiDDenConfiguration():
         self.decoder_loss = decoder_loss
         self.encoder_loss = encoder_loss
         self.adversarial_loss = adversarial_loss
-        self.blocking_loss = blocking_loss
+        #self.blocking_loss = blocking_loss
         self.enable_fp16 = enable_fp16
