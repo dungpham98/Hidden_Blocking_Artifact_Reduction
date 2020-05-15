@@ -12,6 +12,7 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         self.H = config.H
         self.W = config.W
+        self.block_size = config.block_size
         self.conv_channels = config.encoder_channels
         self.num_blocks = config.encoder_blocks
 
@@ -28,13 +29,12 @@ class Encoder(nn.Module):
         self.final_layer = nn.Conv2d(self.conv_channels, 3, kernel_size=1)
 
     def forward(self, image, message):
-
         # First, add two dummy dimensions in the end of the message.
         # This is required for the .expand to work correctly
         expanded_message = message.unsqueeze(-1)
         expanded_message.unsqueeze_(-1)
         #hard fix 32x32
-        expanded_message = expanded_message.expand(-1,-1, 32, 32)
+        expanded_message = expanded_message.expand(-1,-1, self.block_size, self.block_size)
         encoded_image = self.conv_layers(image)
         # concatenate expanded message and image
         concat = torch.cat([expanded_message, encoded_image, image], dim=1)
