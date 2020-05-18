@@ -110,6 +110,7 @@ def train(model: Hidden,
     block_number = int(hidden_config.H/hidden_config.block_size)
     val_folder = train_options.validation_folder
     img_names = listdir(val_folder+"/valid_class")
+    img_names.sort()
     out_folder = train_options.output_folder
     default = train_options.default
     file_count = len(train_data.dataset)
@@ -140,6 +141,11 @@ def train(model: Hidden,
             encoded_imgs = []
             batch = 0 
             #iterate through each image block
+            for i in range(16):
+                img = imgs[i][0]
+                img = img.to(device)
+                #print(img[i].shape)
+                save_image(img,"test_batch/img"+str(i)+".png")
             for img in imgs:
                 img=img.to(device)
                 message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], hidden_config.message_length))).to(device)
@@ -243,8 +249,9 @@ def train(model: Hidden,
             if(epoch == train_options.number_of_epochs):
                 if(train_options.ats):
                     for i in range(0,batch):
-                        image = encoded_images[i]
-                        f_dst = out_folder+"/"+img_names[icount][:-4]+".jpg"
+                        image = encoded_images[i].cpu()
+                        image = (image + 1) / 2
+                        f_dst = out_folder+"/"+img_names[icount]
                         save_image(image,f_dst)
                         icount = icount+1
         #append block effect for plotting

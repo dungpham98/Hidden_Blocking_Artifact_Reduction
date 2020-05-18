@@ -6,7 +6,8 @@ import pickle
 import utils
 import logging
 import sys
-
+import numpy as np
+import random
 from options import *
 from model.hidden import Hidden
 from noise_layers.noiser import Noiser
@@ -14,6 +15,15 @@ from noise_argparser import NoiseArgParser
 
 from train import train
 
+# To make things reproductible
+
+
+def global_seed(random_seed):
+    np.random.seed(random_seed)
+    torch.manual_seed(random_seed + 1)
+    random.seed(random_seed + 10)
+
+global_seed(42)
 
 def main():
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
