@@ -33,6 +33,12 @@ class Hidden:
         self.config = configuration
         self.device = device
 
+        H = config.H
+        block_size = config.block_size
+        self.block_num = int(H/block_size)
+        img_list = []
+        self.img_list = img_list
+
         self.bce_with_logits_loss = nn.BCEWithLogitsLoss().to(device)
         self.mse_loss = nn.MSELoss().to(device)
 
@@ -76,6 +82,12 @@ class Hidden:
 
             # train on fake
             encoded_images, noised_images, decoded_messages = self.encoder_decoder(images, messages)
+            #append image for later loss calculation
+            self.img_list.append(encoded_images)
+            img_list = self.img_list
+            if(len(img_list) == self.block_num):
+                #blocking_effect calculation
+                x = 1
             d_on_encoded = self.discriminator(encoded_images.detach())
             d_loss_on_encoded = self.bce_with_logits_loss(d_on_encoded, d_target_label_encoded)
 
