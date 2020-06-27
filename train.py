@@ -13,25 +13,44 @@ from options import *
 from model.hidden import Hidden
 from average_meter import AverageMeter
 
+WIDTH = 5
+
 def cropImg(size,img_tensor):
     imgs=[]
+    modified_imgs = []
     batch = int(img_tensor.shape[0])
     channel = int(img_tensor.shape[1])
     h = int(img_tensor.shape[2])
     w = int(img_tensor.shape[3])
     n = int(h/size)
     i = 0
+
+    img_tensor1 = img_tensor.cpu().detach().numpy()
     while(i*size < h):
         j = 0
         while(j*size < w):
             i_n =int(i*size)
             j_n = int(j*size)
+
             img = img_tensor[0:batch,0:channel,i_n:(i_n+size),j_n:(j_n+size)]
+            modified_img = img_tensor1[0:batch,0:channel,i_n:(i_n+size),j_n:(j_n+size)]
+
+            if j_n + size + WIDTH <= w:
+                modified_img[0:batch,0:channel, :, size-WIDTH:size] =\
+                    img_tensor1[0:batch,0:channel, i_n:i_n + size, j_n + size:j_n + size+WIDTH]
+
+            if i_n + size + WIDTH < h:
+                modified_img[0:batch,0:channel, size-WIDTH:size, :] =\
+                    img_tensor1[0:batch,0:channel, i_n+size:i_n + size + WIDTH, j_n:j_n + size]
+
             imgs.append(img)
+            #print(np.sum(img.cpu().detach().numpy() - modified_img))
+            modified_imgs.append(torch.tensor(modified_img))
             #torchvision.utils.save_image(img,"cropped"+str(i_n)+str(j_n)+".jpg")
             j = j + 1 
         i = i + 1
-    return imgs
+
+    return imgs,modified_imgs
 
 def concatImgs(imgs,block_number):
     img_len = len(imgs)
@@ -135,29 +154,29 @@ def train(model: Hidden,
         for image, _ in train_data:
             image = image.to(device)
             #crop imgs into blocks
-            imgs = cropImg(block_size,image)
+            imgs, modified_imgs = cropImg(block_size,image)
             bitwise_arr=[]
             main_losses = None
             encoded_imgs = []
             batch = 0 
-            #iterate through each image block
-            for i in range(16):
-                img = imgs[i][0]
-                img = img.to(device)
-                #print(img[i].shape)
-                save_image(img,"test_batch/img"+str(i)+".png")
-            for img in imgs:
+            for img, modified_img in zip(imgs,modified_imgs):
                 img=img.to(device)
+                modified_img = modified_img.to(device)
+
                 message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], hidden_config.message_length))).to(device)
-                losses, (encoded_images, noised_images, decoded_messages) = model.train_on_batch([img, message])
+                losses, (encoded_images, noised_images, decoded_messages) = model.train_on_batch([img, message, modified_img])
                 encoded_imgs.append(encoded_images)
                 batch = encoded_images.shape[0]
                 #get loss in the last block
-                main_losses = losses
+                if main_losses is None:
+                    main_losses = losses
+                    for k in losses:
+                        main_losses[k] = losses[k]/len(imgs)
+                else:
+                    for k in main_losses:
+                        main_losses[k] += losses[k]/len(imgs)
+
                 #get list of bitwise loss
-                for name, loss in losses.items():
-                    if(name == 'bitwise-error  '):
-                        bitwise_arr.append(loss)
             #blocking effect loss calculation
             blocking_loss = blocking_value(encoded_imgs,batch,block_size,block_number)
             #return average bitwise loss in a batch
@@ -200,15 +219,16 @@ def train(model: Hidden,
             image = image.to(device)
             #crop imgs
             imgs = cropImg(block_size,image)
-            #iterate img
+            imgs, modified_imgs = cropImg(block_size,image)
             bitwise_arr=[]
             main_losses = None
-            encoded_imgs=[]
-            batch = 0
-            for img in imgs:
+            encoded_imgs = []
+            batch = 0 
+            for img, modified_img in zip(imgs,modified_imgs):
                 img=img.to(device)
+                modified_img = modified_imgs.to(device)
                 message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], hidden_config.message_length))).to(device)
-                losses, (encoded_images, noised_images, decoded_messages) = model.validate_on_batch([img, message])
+                losses, (encoded_images, noised_images, decoded_messages) = model.validate_on_batch([img, message,modified_img])
                 encoded_imgs.append(encoded_images)
                 batch = encoded_images.shape[0]
                 #get loss in the last block
