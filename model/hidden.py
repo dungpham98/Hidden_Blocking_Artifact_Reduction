@@ -7,7 +7,55 @@ from model.discriminator import Discriminator
 from model.encoder_decoder import EncoderDecoder
 from vgg_loss import VGGLoss
 from noise_layers.noiser import Noiser
+# Bring packages onto the path
+import sys, os
+sys.path.append(os.path.abspath(os.path.join('..', 'Hidden_retest')))
+import utils
 
+
+def blocking_info(encoded_imgs):
+    #stats
+    batch = encoded_imgs[0].shape[0]
+    block_size = encoded_imgs[0].shape[2]
+    block_number = int(len(encoded_imgs)/4)
+    #blocking effect loss
+    Total = 0
+    Count = 0
+    V_average = 0
+    H_average = 0
+    for idx in range(0,batch):
+        for i in range(0,len(encoded_imgs)-1):
+            if((i+1) % block_number != 0):
+                img = encoded_imgs[i][idx][0].cpu().detach().numpy()
+                img_next = encoded_imgs[i+1][idx][0].cpu().detach().numpy()
+                for j in range(0,block_size):
+                    distinct = np.abs(img[j][block_size-1]-img_next[j][0])
+                    V_average = V_average+distinct
+                    if(distinct > 0.25):
+                        Count= Count+1
+                    Total=Total+1
+
+        
+        for i in range(0,len(encoded_imgs)-block_number):
+            img = encoded_imgs[i][idx][0].cpu().detach().numpy()
+            img_next = encoded_imgs[i+block_number][idx][0].cpu().detach().numpy()
+            for j in range(0,block_size):
+                distinct = np.abs(img[block_size-1][j]-img_next[0][j])
+                H_average = H_average+distinct
+                if(distinct > 0.25):
+                    Count= Count+1
+                Total=Total+1
+    
+    """
+    p = (H_average+V_average)/(Total)
+    theta = 2
+    alpha = 1
+    blocking_loss = -alpha*pow((p),theta)*math.log(1-p)
+    blocking_loss = 100 * blocking_loss
+    """
+    #HV LOSS
+
+    return Count,Total
 
 class Hidden:
     def __init__(self, configuration: HiDDenConfiguration, device: torch.device, noiser: Noiser, tb_logger):
@@ -33,15 +81,16 @@ class Hidden:
         self.config = configuration
         self.device = device
 
-        H = config.H
-        block_size = config.block_size
-        self.block_num = int(H/block_size)
+        H = configuration.H
+        block_size = configuration.block_size
+        self.block_num = int(4*H/block_size)
         img_list = []
         self.img_list = img_list
+        self.b_loss = 0
 
         self.bce_with_logits_loss = nn.BCEWithLogitsLoss().to(device)
         self.mse_loss = nn.MSELoss().to(device)
-
+        
         # Defined the labels used for training the discriminator/adversarial loss
         self.cover_label = 1
         self.encoded_label = 0
@@ -77,17 +126,29 @@ class Hidden:
             g_target_label_encoded = torch.full((batch_size, 1), self.cover_label, device=self.device)
 
             d_on_cover = self.discriminator(images)
+            print(d_on_cover)
             d_loss_on_cover = self.bce_with_logits_loss(d_on_cover, d_target_label_cover)
             d_loss_on_cover.backward()
 
             # train on fake
             encoded_images, noised_images, decoded_messages = self.encoder_decoder(images, messages)
             #append image for later loss calculation
+            b_loss = self.b_loss
             self.img_list.append(encoded_images)
-            img_list = self.img_list
-            if(len(img_list) == self.block_num):
-                #blocking_effect calculation
-                x = 1
+            if(len(self.img_list) == self.block_num):
+                #block_number = int(self.block_num/4)
+                Count,Total = blocking_info(self.img_list)
+                UnCount = Total - Count
+                Total_Pair = torch.full((Total, 1), self.cover_label, device=self.device)
+                Distinct_Count = torch.full((Count, 1), self.cover_label, device=self.device)
+                Undistinct_Count = torch.full((UnCount, 1), 0.1, device=self.device)
+                d_count = torch.cat((Distinct_Count,Undistinct_Count),dim = 0)
+                print(Total_Pair)
+                print(d_count)
+                b_loss = self.bce_with_logits_loss(d_count,Total_Pair)
+                b_loss.backward()
+                self.img_list.clear()
+
             d_on_encoded = self.discriminator(encoded_images.detach())
             d_loss_on_encoded = self.bce_with_logits_loss(d_on_encoded, d_target_label_encoded)
 
@@ -110,7 +171,7 @@ class Hidden:
             g_loss_dec = self.mse_loss(decoded_messages, messages)
             g_loss = self.config.adversarial_loss * g_loss_adv + self.config.encoder_loss * g_loss_enc \
                      + self.config.decoder_loss * g_loss_dec
-            #blocking_effect = self.config.blocking_effect
+            
             g_loss.backward()
             self.optimizer_enc_dec.step()
         
@@ -123,7 +184,7 @@ class Hidden:
             'encoder_mse    ': g_loss_enc.item(),
             'dec_mse        ': g_loss_dec.item(),
             'bitwise-error  ': bitwise_avg_err,
-            'blocking_effect': 0,
+            'blocking_effect': b_loss,
             'adversarial_bce': g_loss_adv.item(),
             'discr_cover_bce': d_loss_on_cover.item(),
             'discr_encod_bce': d_loss_on_encoded.item()
@@ -160,6 +221,11 @@ class Hidden:
             d_loss_on_cover = self.bce_with_logits_loss(d_on_cover, d_target_label_cover)
 
             encoded_images, noised_images, decoded_messages = self.encoder_decoder(images, messages)
+            #append image for later loss calculation
+            b_loss = self.b_loss
+            self.img_list.append(encoded_images)
+            if(len(self.img_list) == self.block_num):
+                b_loss = blocking_loss_HV(self.img_list)
 
             d_on_encoded = self.discriminator(encoded_images)
             d_loss_on_encoded = self.bce_with_logits_loss(d_on_encoded, d_target_label_encoded)
