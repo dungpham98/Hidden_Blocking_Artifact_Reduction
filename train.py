@@ -13,11 +13,25 @@ from options import *
 from model.hidden import Hidden
 from average_meter import AverageMeter
 
-WIDTH = 5
+BINS = 256
 
-def cropImg(size,img_tensor):
+def calculate_image_entropy(imgs):
+    ret = []
+    for img in imgs:
+        marg = np.histogramdd(np.ravel(img), bins = BINS)[0]/img.size
+        marg = list(filter(lambda p: p > 0, np.ravel(marg)))
+        entropy = -np.sum(np.multiply(marg, np.log2(marg)))
+
+        ret.append(entropy)
+
+    return np.array(ret)
+
+
+def cropImg(size,img_tensor,WIDTH):
     imgs=[]
     modified_imgs = []
+    entropies = []
+
     batch = int(img_tensor.shape[0])
     channel = int(img_tensor.shape[1])
     h = int(img_tensor.shape[2])
@@ -26,6 +40,7 @@ def cropImg(size,img_tensor):
     i = 0
 
     img_tensor1 = img_tensor.cpu().detach().numpy()
+    img_entropy = calculate_image_entropy(img_tensor1)
     while(i*size < h):
         j = 0
         while(j*size < w):
@@ -39,18 +54,20 @@ def cropImg(size,img_tensor):
                 modified_img[0:batch,0:channel, :, size-WIDTH:size] =\
                     img_tensor1[0:batch,0:channel, i_n:i_n + size, j_n + size:j_n + size+WIDTH]
 
-            if i_n + size + WIDTH < h:
+            if i_n + size + WIDTH <= h:
                 modified_img[0:batch,0:channel, size-WIDTH:size, :] =\
                     img_tensor1[0:batch,0:channel, i_n+size:i_n + size + WIDTH, j_n:j_n + size]
 
             imgs.append(img)
             #print(np.sum(img.cpu().detach().numpy() - modified_img))
             modified_imgs.append(torch.tensor(modified_img))
+            entropies.append(torch.tensor(img_entropy[0:len(modified_img)]))
+
             #torchvision.utils.save_image(img,"cropped"+str(i_n)+str(j_n)+".jpg")
             j = j + 1 
         i = i + 1
 
-    return imgs,modified_imgs
+    return imgs,modified_imgs,entropies
 
 def concatImgs(imgs,block_number):
     img_len = len(imgs)
@@ -132,6 +149,8 @@ def train(model: Hidden,
     img_names.sort()
     out_folder = train_options.output_folder
     default = train_options.default
+    beta = train_options.beta
+    crop_width = int(beta*block_size)
     file_count = len(train_data.dataset)
     if file_count % train_options.batch_size == 0:
         steps_in_epoch = file_count // train_options.batch_size
@@ -154,17 +173,19 @@ def train(model: Hidden,
         for image, _ in train_data:
             image = image.to(device)
             #crop imgs into blocks
-            imgs, modified_imgs = cropImg(block_size,image)
+            imgs, modified_imgs, entropies = cropImg(block_size,image,crop_width)
             bitwise_arr=[]
             main_losses = None
             encoded_imgs = []
             batch = 0 
-            for img, modified_img in zip(imgs,modified_imgs):
+            for img, modified_img, entropy in zip(imgs,modified_imgs, entropies):
                 img=img.to(device)
                 modified_img = modified_img.to(device)
+                entropy = entropy.to(device)
 
                 message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], hidden_config.message_length))).to(device)
-                losses, (encoded_images, noised_images, decoded_messages) = model.train_on_batch([img, message, modified_img])
+                losses, (encoded_images, noised_images, decoded_messages) = \
+                    model.train_on_batch([img, message, modified_img, entropy])
                 encoded_imgs.append(encoded_images)
                 batch = encoded_images.shape[0]
                 #get loss in the last block
@@ -176,16 +197,11 @@ def train(model: Hidden,
                     for k in main_losses:
                         main_losses[k] += losses[k]/len(imgs)
 
-                #get list of bitwise loss
             #blocking effect loss calculation
             blocking_loss = blocking_value(encoded_imgs,batch,block_size,block_number)
-            #return average bitwise loss in a batch
-            bitwise_arr = np.array(bitwise_arr)
-            bitwise_avg = np.average(bitwise_arr)
+          
             #update bitwise training loss
             for name, loss in main_losses.items():
-                if(name == 'bitwise-error  '):
-                    training_losses[name].update(bitwise_avg)
                 if(default == False  and name == 'blocking_effect'):
                     training_losses[name].update(blocking_loss)
                 else:
@@ -215,39 +231,38 @@ def train(model: Hidden,
         ep_blocking = 0
         ep_total = 0
         for image, _ in val_data:
-            
             image = image.to(device)
             #crop imgs
-            imgs = cropImg(block_size,image)
-            imgs, modified_imgs = cropImg(block_size,image)
+            imgs, modified_imgs, entropies = cropImg(block_size,image,crop_width)
             bitwise_arr=[]
             main_losses = None
             encoded_imgs = []
             batch = 0 
-            for img, modified_img in zip(imgs,modified_imgs):
+            for img, modified_img, entropy in zip(imgs,modified_imgs, entropies):
                 img=img.to(device)
-                modified_img = modified_imgs.to(device)
+                modified_img = modified_img.to(device)
+                entropy = entropy.to(device)
+
                 message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], hidden_config.message_length))).to(device)
-                losses, (encoded_images, noised_images, decoded_messages) = model.validate_on_batch([img, message,modified_img])
+                losses, (encoded_images, noised_images, decoded_messages) = \
+                    model.train_on_batch([img, message, modified_img, entropy])
                 encoded_imgs.append(encoded_images)
                 batch = encoded_images.shape[0]
                 #get loss in the last block
-                main_losses = losses
-                #get list of bitwise loss
-                for name, loss in losses.items():
-                    if(name == 'bitwise-error  '):
-                        bitwise_arr.append(loss)
+                if main_losses is None:
+                    main_losses = losses
+                    for k in losses:
+                        main_losses[k] = losses[k]/len(imgs)
+                else:
+                    for k in main_losses:
+                        main_losses[k] += losses[k]/len(imgs)
+                
             #blocking value for plotting
             blocking_loss = blocking_value(encoded_imgs,batch,block_size,block_number)
             ep_blocking = ep_blocking+ blocking_loss
             ep_total = ep_total+1
 
-            bitwise_arr = np.array(bitwise_arr)
-            bitwise_avg = np.average(bitwise_arr)
-
             for name, loss in main_losses.items():
-                if(name == 'bitwise-error  '):
-                    validation_losses[name].update(bitwise_avg)
                 if(default == False  and name == 'blocking_effect'):
                     validation_losses[name].update(blocking_loss)
                 else:

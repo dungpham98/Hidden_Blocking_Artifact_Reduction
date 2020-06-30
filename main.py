@@ -57,6 +57,7 @@ def main():
     new_run_parser.add_argument('--out-dir',default ="HiDDeN_Enc", type=str, help='The output directory.')
     new_run_parser.add_argument('--val-dir', type=str, help='The test folder.')
     new_run_parser.add_argument('--default',default = False, type=bool, help='Load the default HiDDeN configuration.')
+    new_run_parser.add_argument('--wbeta', type=float, help='The beta width.')
 
     new_run_parser.set_defaults(tensorboard=False)
     new_run_parser.set_defaults(enable_fp16=False)
@@ -107,6 +108,7 @@ def main():
             experiment_name=args.name,
             ats = args.ats,
             default=args.default,
+            beta=args.wbeta,
             output_folder = args.out_dir)
 
         noise_config = args.noise if args.noise is not None else []
