@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-
 from options import HiDDenConfiguration
 from model.discriminator import Discriminator
 from model.encoder_decoder import EncoderDecoder
@@ -13,50 +12,12 @@ sys.path.append(os.path.abspath(os.path.join('..', 'Hidden_retest')))
 import utils
 
 
-
-def blocking_info(encoded_imgs):
-    #stats
-    batch = encoded_imgs[0].shape[0]
-    block_size = encoded_imgs[0].shape[2]
-    block_number = int(len(encoded_imgs)/4)
-    #blocking effect loss
-    Total = 0
-    Count = 0
-    V_average = 0
-    H_average = 0
-    for idx in range(0,batch):
-        for i in range(0,len(encoded_imgs)-1):
-            if((i+1) % block_number != 0):
-                img = encoded_imgs[i][idx][0].cpu().detach().numpy()
-                img_next = encoded_imgs[i+1][idx][0].cpu().detach().numpy()
-                for j in range(0,block_size):
-                    distinct = np.abs(img[j][block_size-1]-img_next[j][0])
-                    V_average = V_average+distinct
-                    if(distinct > 0.25):
-                        Count= Count+1
-                    Total=Total+1
-
-        
-        for i in range(0,len(encoded_imgs)-block_number):
-            img = encoded_imgs[i][idx][0].cpu().detach().numpy()
-            img_next = encoded_imgs[i+block_number][idx][0].cpu().detach().numpy()
-            for j in range(0,block_size):
-                distinct = np.abs(img[block_size-1][j]-img_next[0][j])
-                H_average = H_average+distinct
-                if(distinct > 0.25):
-                    Count= Count+1
-                Total=Total+1
-    
-    """
-    p = (H_average+V_average)/(Total)
-    theta = 2
-    alpha = 1
-    blocking_loss = -alpha*pow((p),theta)*math.log(1-p)
-    blocking_loss = 100 * blocking_loss
-    """
-    #HV LOSS
-
-    return Count,Total
+def weighted_mse_loss(input, target, weights):
+    out = (input - target) ** 2
+    out = out * weights.expand_as(out)
+    # expand_as because weights are prob not defined for mini-batch
+    #loss =  # or sum over whatever dimensions
+    return torch.mean(out)
 
 class Hidden:
     def __init__(self, configuration: HiDDenConfiguration, device: torch.device, noiser: Noiser, tb_logger):
@@ -91,6 +52,9 @@ class Hidden:
 
         self.bce_with_logits_loss = nn.BCEWithLogitsLoss().to(device)
         self.mse_loss = nn.MSELoss().to(device)
+        self.Smooth_L1_Loss = nn.SmoothL1Loss().to(device)
+        #self.mse_loss1 = nn.MSELoss().to(device)
+        #self.mse_loss1 = nn.KLDivLoss().to(device)
         
         # Defined the labels used for training the discriminator/adversarial loss
         self.cover_label = 1
@@ -113,8 +77,9 @@ class Hidden:
         :param batch: batch of training data, in the form [images, messages]
         :return: dictionary of error metrics from Encoder, Decoder, and Discriminator on the current batch
         """
-        images, messages, modified_imgs = batch
+        images, messages, modified_imgs, entropies = batch
         batch_size = images.shape[0]
+        # print(images.shape)
 
         self.encoder_decoder.train()
         self.discriminator.train()
@@ -154,12 +119,15 @@ class Hidden:
                 g_loss_enc = self.mse_loss(vgg_on_cov, vgg_on_enc)
 
             block_errors = self.mse_loss(encoded_images, modified_imgs)
+            #block_errors = weighted_mse_loss(encoded_images, modified_imgs, entropies)
+            #block_errors = self.Smooth_L1_Loss(encoded_images, modified_imgs)
 
             g_loss_dec = self.mse_loss(decoded_messages, messages)
             g_loss = self.config.adversarial_loss * g_loss_adv + self.config.encoder_loss * g_loss_enc \
-                     + self.config.decoder_loss * g_loss_dec + block_errors
+                     + self.config.decoder_loss * g_loss_dec + 0.01*block_errors
             
             g_loss.backward()
+            nn.utils.clip_grad_norm_(self.encoder_decoder.parameters(), 1.0)
             self.optimizer_enc_dec.step()
         
         decoded_rounded = decoded_messages.detach().cpu().numpy().round().clip(0, 1)
@@ -176,7 +144,7 @@ class Hidden:
             'adversarial_bce': g_loss_adv.item(),
             'discr_cover_bce': d_loss_on_cover.item(),
             'discr_encod_bce': d_loss_on_encoded.item(),
-            'new_blocking_effect': block_errors.item(),
+            'blocking_loss': block_errors.item(),
         }
         return losses, (encoded_images, noised_images, decoded_messages)
 
@@ -195,7 +163,7 @@ class Hidden:
             discrim_final = self.discriminator._modules['linear']
             self.tb_logger.add_tensor('weights/discrim_out', discrim_final.weight)
 
-        images, messages, modified_imgs = batch
+        images, messages, modified_imgs, entropies = batch
 
         batch_size = images.shape[0]
 
@@ -227,6 +195,9 @@ class Hidden:
                 g_loss_enc = self.mse_loss(vgg_on_cov, vgg_on_enc)
 
             block_errors = self.mse_loss(encoded_images, modified_imgs)
+            #block_errors = weighted_mse_loss(encoded_images, modified_imgs, entropies)
+            #block_errors = self.Smooth_L1_Loss(encoded_images, modified_imgs)
+
             g_loss_dec = self.mse_loss(decoded_messages, messages)
             g_loss = self.config.adversarial_loss * g_loss_adv + self.config.encoder_loss * g_loss_enc \
                      + self.config.decoder_loss * g_loss_dec+block_errors
@@ -244,7 +215,7 @@ class Hidden:
             'adversarial_bce': g_loss_adv.item(),
             'discr_cover_bce': d_loss_on_cover.item(),
             'discr_encod_bce': d_loss_on_encoded.item(),
-            'new_blocking_effect':block_errors.item(),
+            'blocking_loss':block_errors.item(),
         }
         return losses, (encoded_images, noised_images, decoded_messages)
 
