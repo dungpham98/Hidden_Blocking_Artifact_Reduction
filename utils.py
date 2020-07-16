@@ -143,10 +143,11 @@ def get_data_loaders(hidden_config: HiDDenConfiguration, train_options: Training
 
     train_images = datasets.ImageFolder(train_options.train_folder, data_transforms['train'])
     train_loader = torch.utils.data.DataLoader(train_images, batch_size=train_options.batch_size, shuffle=True,
+                                               drop_last=True,
                                                num_workers=4)
 
-    validation_images = datasets.ImageFolder(train_options.validation_folder, data_transforms['test_gray'])
-    validation_loader = torch.utils.data.DataLoader(validation_images, batch_size=train_options.batch_size,
+    validation_images = datasets.ImageFolder(train_options.validation_folder, data_transforms['test'])
+    validation_loader = torch.utils.data.DataLoader(validation_images, batch_size=train_options.batch_size, drop_last=True,
                                                     shuffle=False, num_workers=4)
 
     return train_loader, validation_loader
@@ -188,3 +189,81 @@ def write_losses(file_name, losses_accu, epoch, duration):
         row_to_write = [epoch] + ['{:.4f}'.format(loss_avg.avg) for loss_avg in losses_accu.values()] + [
             '{:.0f}'.format(duration)]
         writer.writerow(row_to_write)
+
+def calculate_image_entropy(imgs):
+    BINS = 256
+    ret = []
+    for img in imgs:
+        marg = np.histogramdd(np.ravel(img), bins = BINS)[0]/img.size
+        marg = list(filter(lambda p: p > 0, np.ravel(marg)))
+        entropy = -np.sum(np.multiply(marg, np.log2(marg)))
+
+        ret.append(entropy)
+
+    return np.array(ret)
+
+def cropImg(size,img_tensor,WIDTH):
+    ALPHA = 1
+
+    imgs=[]
+    modified_imgs = []
+    entropies = []
+
+    batch = int(img_tensor.shape[0])
+    channel = int(img_tensor.shape[1])
+    h = int(img_tensor.shape[2])
+    w = int(img_tensor.shape[3])
+    n = int(h/size)
+    i = 0
+
+    img_tensor1 = img_tensor.cpu().detach().numpy()
+    img_entropy = calculate_image_entropy(img_tensor1)
+    while(i*size < h):
+        j = 0
+        while(j*size < w):
+            i_n =int(i*size)
+            j_n = int(j*size)
+
+            img = img_tensor[0:batch,0:channel,i_n:(i_n+size),j_n:(j_n+size)]
+            modified_img = img_tensor1[0:batch,0:channel,i_n:(i_n+size),j_n:(j_n+size)]
+           
+            nig_img = modified_img
+            if j_n + size + WIDTH <= w:
+                modified_img[0:batch,0:channel, :, size-WIDTH:size] =\
+                    img_tensor1[0:batch,0:channel, i_n:i_n + size, j_n + size:j_n + size+WIDTH]*ALPHA
+
+            if i_n + size + WIDTH <= h:
+                modified_img[0:batch,0:channel, size-WIDTH:size, :] =\
+                    img_tensor1[0:batch,0:channel, i_n+size:i_n + size + WIDTH, j_n:j_n + size]*ALPHA
+            
+            imgs.append(img)
+            #print(np.sum(img.cpu().detach().numpy() - modified_img))
+            modified_imgs.append(torch.tensor(modified_img))
+            #save_image(torch.tensor(modified_img),"modi.jpg")
+            
+            entropies.append(torch.tensor(img_entropy[0:len(modified_img)]))
+
+            #torchvision.utils.save_image(img,"cropped"+str(i_n)+str(j_n)+".jpg")
+            j = j + 1 
+        i = i + 1
+
+    return imgs,modified_imgs,entropies,img_entropy
+
+def concatImgs(imgs,block_number):
+    img_len = len(imgs)
+    i = 0
+    img_cat =[]
+    block_num = block_number*block_number
+    while(i < block_num):
+        img_col = torch.cat([imgs[0+i],imgs[1+i]],3)
+        for j in range(2,block_number):
+            img_col = torch.cat([img_col,imgs[j+i]],3)
+        img_cat.append(img_col)
+        i = i + block_number
+    img = torch.cat([img_cat[0],img_cat[1]],2)
+    #print(img.shape)
+    for i in range(2,len(img_cat)):
+        img = torch.cat([img,img_cat[i]],2)
+
+    #img = torch.cat([img_cat[0],img_cat[1],img_cat[2],img_cat[3]],2)
+    return img

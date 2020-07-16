@@ -58,6 +58,8 @@ def main():
     new_run_parser.add_argument('--val-dir', type=str, help='The test folder.')
     new_run_parser.add_argument('--default',default = False, type=bool, help='Load the default HiDDeN configuration.')
     new_run_parser.add_argument('--wbeta', type=float, help='The beta width.')
+    new_run_parser.add_argument('--alpha', type=float, help='The alpha.')
+    new_run_parser.add_argument('--loss', type=str, help='The blocking loss type.')
 
     new_run_parser.set_defaults(tensorboard=False)
     new_run_parser.set_defaults(enable_fp16=False)
@@ -71,7 +73,10 @@ def main():
                                 help='Number of epochs to run the simulation. Specify a value only if you want to override the previous value.')
     # continue_parser.add_argument('--tensorboard', action='store_true',
     #                             help='Override the previous setting regarding tensorboard logging.')
-
+    continue_parser.add_argument('--val-dir', required=False, type=str,
+                                    help='The test folder. Specify a value only if you want to override the previous value.')
+    continue_parser.add_argument('--out-dir',default ="HiDDeN_Enc", type=str, help='The output directory.')
+    
     args = parent_parser.parse_args()
     if(args.val_dir == None):
         args.val_dir = os.path.join(args.data_dir, 'val')
@@ -84,6 +89,8 @@ def main():
         train_options, hidden_config, noise_config = utils.load_options(options_file)
         checkpoint, loaded_checkpoint_file_name = utils.load_last_checkpoint(os.path.join(this_run_folder, 'checkpoints'))
         train_options.start_epoch = checkpoint['epoch'] + 1
+        if args.out_dir is not None:
+            train_options.output_folder 
         if args.data_dir is not None:
             train_options.train_folder = os.path.join(args.data_dir, 'train')
             train_options.validation_folder = os.path.join(args.data_dir, 'val')
@@ -109,6 +116,8 @@ def main():
             ats = args.ats,
             default=args.default,
             beta=args.wbeta,
+            alpha = args.alpha,
+            loss_mode = args.loss,
             output_folder = args.out_dir)
 
         noise_config = args.noise if args.noise is not None else []

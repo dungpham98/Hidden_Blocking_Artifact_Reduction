@@ -27,7 +27,7 @@ def calculate_image_entropy(imgs):
     return np.array(ret)
 
 
-def cropImg(size,img_tensor,WIDTH):
+def cropImg(size,img_tensor,WIDTH,ALPHA):
     imgs=[]
     modified_imgs = []
     entropies = []
@@ -51,12 +51,14 @@ def cropImg(size,img_tensor,WIDTH):
             modified_img = img_tensor1[0:batch,0:channel,i_n:(i_n+size),j_n:(j_n+size)]
 
             if j_n + size + WIDTH <= w:
-                modified_img[0:batch,0:channel, :, size-WIDTH:size] =\
-                    img_tensor1[0:batch,0:channel, i_n:i_n + size, j_n + size:j_n + size+WIDTH]
+                modified_img[0:batch,0:channel, :, size-WIDTH:size] *= (1-ALPHA)
+                modified_img[0:batch,0:channel, :, size-WIDTH:size] +=\
+                    ALPHA*img_tensor1[0:batch,0:channel, i_n:i_n + size, j_n + size:j_n + size+WIDTH]
 
             if i_n + size + WIDTH <= h:
-                modified_img[0:batch,0:channel, size-WIDTH:size, :] =\
-                    img_tensor1[0:batch,0:channel, i_n+size:i_n + size + WIDTH, j_n:j_n + size]
+                modified_img[0:batch,0:channel, size-WIDTH:size, :] *= (1-ALPHA)
+                modified_img[0:batch,0:channel, size-WIDTH:size, :] +=\
+                    ALPHA*img_tensor1[0:batch,0:channel, i_n+size:i_n + size + WIDTH, j_n:j_n + size]
 
             imgs.append(img)
             #print(np.sum(img.cpu().detach().numpy() - modified_img))
@@ -145,6 +147,8 @@ def train(model: Hidden,
     block_size = hidden_config.block_size
     block_number = int(hidden_config.H/hidden_config.block_size)
     val_folder = train_options.validation_folder
+    loss_type = train_options.loss_mode
+    alpha = train_options.alpha
     img_names = listdir(val_folder+"/valid_class")
     img_names.sort()
     out_folder = train_options.output_folder
@@ -173,7 +177,7 @@ def train(model: Hidden,
         for image, _ in train_data:
             image = image.to(device)
             #crop imgs into blocks
-            imgs, modified_imgs, entropies = cropImg(block_size,image,crop_width)
+            imgs, modified_imgs, entropies = cropImg(block_size,image,crop_width,alpha)
             bitwise_arr=[]
             main_losses = None
             encoded_imgs = []
@@ -185,7 +189,7 @@ def train(model: Hidden,
 
                 message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], hidden_config.message_length))).to(device)
                 losses, (encoded_images, noised_images, decoded_messages) = \
-                    model.train_on_batch([img, message, modified_img, entropy])
+                    model.train_on_batch([img, message, modified_img, entropy,loss_type])
                 encoded_imgs.append(encoded_images)
                 batch = encoded_images.shape[0]
                 #get loss in the last block
@@ -230,14 +234,16 @@ def train(model: Hidden,
         #validation
         ep_blocking = 0
         ep_total = 0
+     
         for image, _ in val_data:
             image = image.to(device)
             #crop imgs
-            imgs, modified_imgs, entropies = cropImg(block_size,image,crop_width)
+            imgs, modified_imgs, entropies = cropImg(block_size,image,crop_width,alpha)
             bitwise_arr=[]
             main_losses = None
             encoded_imgs = []
-            batch = 0 
+            batch = 0
+          
             for img, modified_img, entropy in zip(imgs,modified_imgs, entropies):
                 img=img.to(device)
                 modified_img = modified_img.to(device)
@@ -245,7 +251,7 @@ def train(model: Hidden,
 
                 message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], hidden_config.message_length))).to(device)
                 losses, (encoded_images, noised_images, decoded_messages) = \
-                    model.train_on_batch([img, message, modified_img, entropy])
+                    model.train_on_batch([img, message, modified_img, entropy,loss_type])
                 encoded_imgs.append(encoded_images)
                 batch = encoded_images.shape[0]
                 #get loss in the last block
@@ -291,10 +297,9 @@ def train(model: Hidden,
                         icount = icount+1
         #append block effect for plotting
         plot_block.append(ep_blocking/ep_total)
-
+    
         utils.log_progress(validation_losses)
         logging.info('-' * 40)
         utils.save_checkpoint(model, train_options.experiment_name, epoch, os.path.join(this_run_folder, 'checkpoints'))
         utils.write_losses(os.path.join(this_run_folder, 'validation.csv'), validation_losses, epoch,
                            time.time() - epoch_start)
-    print(plot_block)

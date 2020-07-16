@@ -14,7 +14,11 @@ import utils
 
 def weighted_mse_loss(input, target, weights):
     out = (input - target) ** 2
+    weights.unsqueeze_(-1)
+    weights.unsqueeze_(-1)
+    weights.unsqueeze_(-1)
     out = out * weights.expand_as(out)
+
     # expand_as because weights are prob not defined for mini-batch
     #loss =  # or sum over whatever dimensions
     return torch.mean(out)
@@ -77,7 +81,7 @@ class Hidden:
         :param batch: batch of training data, in the form [images, messages]
         :return: dictionary of error metrics from Encoder, Decoder, and Discriminator on the current batch
         """
-        images, messages, modified_imgs, entropies = batch
+        images, messages, modified_imgs, entropies, loss_type = batch
         batch_size = images.shape[0]
         # print(images.shape)
 
@@ -118,13 +122,19 @@ class Hidden:
                 vgg_on_enc = self.vgg_loss(encoded_images)
                 g_loss_enc = self.mse_loss(vgg_on_cov, vgg_on_enc)
 
-            block_errors = self.mse_loss(encoded_images, modified_imgs)
-            #block_errors = weighted_mse_loss(encoded_images, modified_imgs, entropies)
+            block_errors = 0
+            block_error = 0
+            if(loss_type == "mse"):
+                block_errors = self.mse_loss(encoded_images, modified_imgs)
+            if(loss_type == "wmse"):
+                block_errors = weighted_mse_loss(encoded_images, modified_imgs, entropies)
             #block_errors = self.Smooth_L1_Loss(encoded_images, modified_imgs)
-
+            #block_errors = 0
+            if(block_errors != 0):
+                block_error = block_errors.item()
             g_loss_dec = self.mse_loss(decoded_messages, messages)
             g_loss = self.config.adversarial_loss * g_loss_adv + self.config.encoder_loss * g_loss_enc \
-                     + self.config.decoder_loss * g_loss_dec + 0.01*block_errors
+                     + self.config.decoder_loss * g_loss_dec + block_errors
             
             g_loss.backward()
             nn.utils.clip_grad_norm_(self.encoder_decoder.parameters(), 1.0)
@@ -144,7 +154,8 @@ class Hidden:
             'adversarial_bce': g_loss_adv.item(),
             'discr_cover_bce': d_loss_on_cover.item(),
             'discr_encod_bce': d_loss_on_encoded.item(),
-            'blocking_loss': block_errors.item(),
+            'blocking_loss': block_error,
+            #block_errors.item(),
         }
         return losses, (encoded_images, noised_images, decoded_messages)
 
@@ -163,7 +174,7 @@ class Hidden:
             discrim_final = self.discriminator._modules['linear']
             self.tb_logger.add_tensor('weights/discrim_out', discrim_final.weight)
 
-        images, messages, modified_imgs, entropies = batch
+        images, messages, modified_imgs, entropies, loss_type = batch
 
         batch_size = images.shape[0]
 
@@ -194,9 +205,19 @@ class Hidden:
                 vgg_on_enc = self.vgg_loss(encoded_images)
                 g_loss_enc = self.mse_loss(vgg_on_cov, vgg_on_enc)
 
-            block_errors = self.mse_loss(encoded_images, modified_imgs)
-            #block_errors = weighted_mse_loss(encoded_images, modified_imgs, entropies)
+            block_errors = 0
+            block_error = 0
+            if(loss_type == "mse"):
+                block_errors = self.mse_loss(encoded_images, modified_imgs)
+            if(loss_type == "wmse"):
+                block_errors = weighted_mse_loss(encoded_images, modified_imgs, entropies)
             #block_errors = self.Smooth_L1_Loss(encoded_images, modified_imgs)
+            #block_errors = 0
+            if(block_errors != 0):
+                block_error = block_errors.item()
+            g_loss_dec = self.mse_loss(decoded_messages, messages)
+            g_loss = self.config.adversarial_loss * g_loss_adv + self.config.encoder_loss * g_loss_enc \
+                     + self.config.decoder_loss * g_loss_dec + block_errors
 
             g_loss_dec = self.mse_loss(decoded_messages, messages)
             g_loss = self.config.adversarial_loss * g_loss_adv + self.config.encoder_loss * g_loss_enc \
@@ -215,7 +236,8 @@ class Hidden:
             'adversarial_bce': g_loss_adv.item(),
             'discr_cover_bce': d_loss_on_cover.item(),
             'discr_encod_bce': d_loss_on_encoded.item(),
-            'blocking_loss':block_errors.item(),
+            'blocking_loss':block_error,
+            #block_errors.item(),
         }
         return losses, (encoded_images, noised_images, decoded_messages)
 

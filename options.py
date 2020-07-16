@@ -8,6 +8,7 @@ class TrainingOptions:
                  number_of_epochs: int,
                  train_folder: str, validation_folder: str, runs_folder: str,
                  start_epoch: int, experiment_name: str,ats: bool,default:bool,
+                 beta:float,alpha:float,loss_mode:str,
                  output_folder:str):
         self.batch_size = batch_size
         self.number_of_epochs = number_of_epochs
@@ -18,6 +19,9 @@ class TrainingOptions:
         self.experiment_name = experiment_name
         self.ats = ats
         self.default= default
+        self.beta = beta
+        self.alpha = alpha
+        self.loss_mode = loss_mode
         self.output_folder = output_folder
 
 
