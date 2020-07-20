@@ -41,7 +41,7 @@ def main():
                                 help='The size of the images (images are square so this is height and width).')
     new_run_parser.add_argument('--block_size', '-bs', default=32, type=int,
                                 help='The block size of the images (images are square so this is height and width).')
-    new_run_parser.add_argument('--message', '-m', default=30, type=int, help='The length in bits of the watermark.')
+    new_run_parser.add_argument('--message', '-m', default=30, type=int, help='The length in bits of the watermark.Also the size for the network')
     new_run_parser.add_argument('--continue-from-folder', '-c', default='', type=str,
                                 help='The folder from where to continue a previous run. Leave blank if you are starting a new experiment.')
     # parser.add_argument('--tensorboard', dest='tensorboard', action='store_true',
@@ -60,6 +60,7 @@ def main():
     new_run_parser.add_argument('--wbeta', type=float, help='The beta width.')
     new_run_parser.add_argument('--alpha', type=float, help='The alpha.')
     new_run_parser.add_argument('--loss', type=str, help='The blocking loss type.')
+    new_run_parser.add_argument('--rmessage', type=int, required=False, help='The message length, the real length which not conflict with net size')
 
     new_run_parser.set_defaults(tensorboard=False)
     new_run_parser.set_defaults(enable_fp16=False)
@@ -78,6 +79,7 @@ def main():
     continue_parser.add_argument('--out-dir',default ="HiDDeN_Enc", type=str, help='The output directory.')
     
     args = parent_parser.parse_args()
+    cmd = ' '.join(sys.argv)
     if(args.val_dir == None):
         args.val_dir = os.path.join(args.data_dir, 'val')
     checkpoint = None
@@ -118,6 +120,7 @@ def main():
             beta=args.wbeta,
             alpha = args.alpha,
             loss_mode = args.loss,
+            rmessage = args.rmessage,
             output_folder = args.out_dir)
 
         noise_config = args.noise if args.noise is not None else []
@@ -174,6 +177,8 @@ def main():
     logging.info(pprint.pformat(vars(train_options)))
 
     train(model, device, hidden_config, train_options, this_run_folder, tb_logger)
+    with open(os.path.join(this_run_folder, 'cmd.txt'), 'w') as f:
+        f.write(cmd + '\n')
 
 
 if __name__ == '__main__':

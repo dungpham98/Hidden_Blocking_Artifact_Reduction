@@ -21,8 +21,8 @@ def calculate_image_entropy(imgs):
         marg = np.histogramdd(np.ravel(img), bins = BINS)[0]/img.size
         marg = list(filter(lambda p: p > 0, np.ravel(marg)))
         entropy = -np.sum(np.multiply(marg, np.log2(marg)))
-
-        ret.append(entropy)
+        
+        ret.append(entropy/8)
 
     return np.array(ret)
 
@@ -148,6 +148,7 @@ def train(model: Hidden,
     block_number = int(hidden_config.H/hidden_config.block_size)
     val_folder = train_options.validation_folder
     loss_type = train_options.loss_mode
+    m_length = hidden_config.message_length
     alpha = train_options.alpha
     img_names = listdir(val_folder+"/valid_class")
     img_names.sort()
@@ -186,8 +187,10 @@ def train(model: Hidden,
                 img=img.to(device)
                 modified_img = modified_img.to(device)
                 entropy = entropy.to(device)
-
-                message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], hidden_config.message_length))).to(device)
+                if(train_options.rmessage is not None):
+                    m_length = train_options.rmessage
+                print(m_length)
+                message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], m_length))).to(device)
                 losses, (encoded_images, noised_images, decoded_messages) = \
                     model.train_on_batch([img, message, modified_img, entropy,loss_type])
                 encoded_imgs.append(encoded_images)
@@ -248,8 +251,9 @@ def train(model: Hidden,
                 img=img.to(device)
                 modified_img = modified_img.to(device)
                 entropy = entropy.to(device)
-
-                message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], hidden_config.message_length))).to(device)
+                if(train_options.rmessage is not None):
+                    m_length = train_options.rmessage
+                message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], m_length))).to(device)
                 losses, (encoded_images, noised_images, decoded_messages) = \
                     model.train_on_batch([img, message, modified_img, entropy,loss_type])
                 encoded_imgs.append(encoded_images)
