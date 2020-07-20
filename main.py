@@ -60,7 +60,6 @@ def main():
     new_run_parser.add_argument('--wbeta', type=float, help='The beta width.')
     new_run_parser.add_argument('--alpha', type=float, help='The alpha.')
     new_run_parser.add_argument('--loss', type=str, help='The blocking loss type.')
-    new_run_parser.add_argument('--rmessage', type=int, required=False, help='The message length, the real length which not conflict with net size')
 
     new_run_parser.set_defaults(tensorboard=False)
     new_run_parser.set_defaults(enable_fp16=False)
@@ -120,14 +119,13 @@ def main():
             beta=args.wbeta,
             alpha = args.alpha,
             loss_mode = args.loss,
-            rmessage = args.rmessage,
             output_folder = args.out_dir)
 
         noise_config = args.noise if args.noise is not None else []
         hidden_config = HiDDenConfiguration(H=args.size, W=args.size,block_size=args.block_size,
                                             message_length=args.message,
                                             encoder_blocks=4, encoder_channels=64,
-                                            decoder_blocks=7, decoder_channels=64,
+                                            decoder_blocks=10, decoder_channels=64,
                                             use_discriminator=True,
                                             use_vgg=False,
                                             discriminator_blocks=3, discriminator_channels=64,

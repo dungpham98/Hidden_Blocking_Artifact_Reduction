@@ -20,6 +20,7 @@ class Decoder(nn.Module):
 
         # layers.append(block_builder(self.channels, config.message_length))
         layers.append(ConvBNRelu(self.channels, config.message_length))
+        #layers.append(ConvBNRelu(self.channels, config.message_length))
 
         layers.append(nn.AdaptiveAvgPool2d(output_size=(1, 1)))
         self.layers = nn.Sequential(*layers)

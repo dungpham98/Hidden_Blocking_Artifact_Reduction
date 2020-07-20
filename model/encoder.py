@@ -33,7 +33,7 @@ class Encoder(nn.Module):
         # This is required for the .expand to work correctly
         expanded_message = message.unsqueeze(-1)
         expanded_message.unsqueeze_(-1)
-        #hard fix 32x32
+    
         expanded_message = expanded_message.expand(-1,-1, self.block_size, self.block_size)
         encoded_image = self.conv_layers(image)
         # concatenate expanded message and image
