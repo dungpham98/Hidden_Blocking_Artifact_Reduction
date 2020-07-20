@@ -112,7 +112,7 @@ def blocking_value(encoded_imgs,batch,block_size,block_number):
                         Vcount = Vcount+1
 
         
-        for i in range(0,len(encoded_imgs)-4):
+        for i in range(0,len(encoded_imgs)-block_number):
             img = encoded_imgs[i][idx][0].cpu().detach().numpy()
             img_next = encoded_imgs[i+block_number][idx][0].cpu().detach().numpy()
             for j in range(0,block_size):
@@ -187,9 +187,7 @@ def train(model: Hidden,
                 img=img.to(device)
                 modified_img = modified_img.to(device)
                 entropy = entropy.to(device)
-                if(train_options.rmessage is not None):
-                    m_length = train_options.rmessage
-                print(m_length)
+                
                 message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], m_length))).to(device)
                 losses, (encoded_images, noised_images, decoded_messages) = \
                     model.train_on_batch([img, message, modified_img, entropy,loss_type])
@@ -251,8 +249,7 @@ def train(model: Hidden,
                 img=img.to(device)
                 modified_img = modified_img.to(device)
                 entropy = entropy.to(device)
-                if(train_options.rmessage is not None):
-                    m_length = train_options.rmessage
+                
                 message = torch.Tensor(np.random.choice([0, 1], (img.shape[0], m_length))).to(device)
                 losses, (encoded_images, noised_images, decoded_messages) = \
                     model.train_on_batch([img, message, modified_img, entropy,loss_type])
