@@ -12,22 +12,22 @@ from options import *
 from model.hidden import Hidden
 from noise_layers.noiser import Noiser
 from noise_argparser import NoiseArgParser
+import EasyDict as edict
+import train
 
-from train import train
 
 # To make things reproductible
-
 
 def global_seed(random_seed):
     np.random.seed(random_seed)
     torch.manual_seed(random_seed + 1)
     random.seed(random_seed + 10)
 
+
 global_seed(42)
 
-def main():
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-
+def parse_args():
+    # Params
     parent_parser = argparse.ArgumentParser(description='Training of HiDDeN nets')
     subparsers = parent_parser.add_subparsers(dest='command', help='Sub-parser for commands')
     new_run_parser = subparsers.add_parser('new', help='starts a new run')
@@ -41,22 +41,21 @@ def main():
                                 help='The size of the images (images are square so this is height and width).')
     new_run_parser.add_argument('--block_size', '-bs', default=32, type=int,
                                 help='The block size of the images (images are square so this is height and width).')
-    new_run_parser.add_argument('--message', '-m', default=30, type=int, help='The length in bits of the watermark.Also the size for the network')
+    new_run_parser.add_argument('--message', '-m', default=30, type=int,
+                                help='The length in bits of the watermark.Also the size for the network')
     new_run_parser.add_argument('--continue-from-folder', '-c', default='', type=str,
-                                help='The folder from where to continue a previous run. Leave blank if you are starting a new experiment.')
-    # parser.add_argument('--tensorboard', dest='tensorboard', action='store_true',
-    #                     help='If specified, use adds a Tensorboard log. On by default')
-    new_run_parser.add_argument('--tensorboard', action='store_true',
-                                help='Use to switch on Tensorboard logging.')
+                                help='The folder from where to continue a previous run. Leave blank if you are '
+                                     'starting a new experiment.')
     new_run_parser.add_argument('--enable-fp16', dest='enable_fp16', action='store_true',
                                 help='Enable mixed-precision training.')
-    new_run_parser.add_argument('--ats',default = False,type = bool,
+    new_run_parser.add_argument('--ats', default=False, type=bool,
                                 help='Enable ATS for secrecy validation.')
     new_run_parser.add_argument('--noise', nargs='*', action=NoiseArgParser,
-                                help="Noise layers configuration. Use quotes when specifying configuration, e.g. 'cropout((0.55, 0.6), (0.55, 0.6))'")
-    new_run_parser.add_argument('--out-dir',default ="HiDDeN_Enc", type=str, help='The output directory.')
+                                help="Noise layers configuration. Use quotes when specifying configuration, "
+                                     "e.g. 'cropout((0.55, 0.6), (0.55, 0.6))'")
+    new_run_parser.add_argument('--out-dir', default="HiDDeN_Enc", type=str, help='The output directory.')
     new_run_parser.add_argument('--val-dir', type=str, help='The test folder.')
-    new_run_parser.add_argument('--default',default = False, type=bool, help='Load the default HiDDeN configuration.')
+    new_run_parser.add_argument('--default', default=False, type=bool, help='Load the default HiDDeN configuration.')
     new_run_parser.add_argument('--wbeta', type=float, help='The beta width.')
     new_run_parser.add_argument('--alpha', type=float, help='The alpha.')
     new_run_parser.add_argument('--loss', type=str, help='The blocking loss type.')
@@ -68,18 +67,25 @@ def main():
     continue_parser.add_argument('--folder', '-f', required=True, type=str,
                                  help='Continue from the last checkpoint in this folder.')
     continue_parser.add_argument('--data-dir', '-d', required=False, type=str,
-                                 help='The directory where the data is stored. Specify a value only if you want to override the previous value.')
+                                 help='The directory where the data is stored. Specify a value only if you want to '
+                                      'override the previous value.')
     continue_parser.add_argument('--epochs', '-e', required=False, type=int,
-                                help='Number of epochs to run the simulation. Specify a value only if you want to override the previous value.')
+                                 help='Number of epochs to run the simulation. Specify a value only if you want to '
+                                      'override the previous value.')
     # continue_parser.add_argument('--tensorboard', action='store_true',
     #                             help='Override the previous setting regarding tensorboard logging.')
     continue_parser.add_argument('--val-dir', required=False, type=str,
-                                    help='The test folder. Specify a value only if you want to override the previous value.')
-    continue_parser.add_argument('--out-dir',default ="HiDDeN_Enc", type=str, help='The output directory.')
-    
-    args = parent_parser.parse_args()
+                                 help='The test folder. Specify a value only if you want to override the previous '
+                                      'value.')
+    continue_parser.add_argument('--out-dir', default="HiDDeN_Enc", type=str, help='The output directory.')
+
+    return parent_parser.parse_args()
+
+def main():
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     cmd = ' '.join(sys.argv)
-    if(args.val_dir == None):
+    args = parse_args()
+    if args.val_dir is None:
         args.val_dir = os.path.join(args.data_dir, 'val')
     checkpoint = None
     loaded_checkpoint_file_name = None
@@ -88,10 +94,11 @@ def main():
         this_run_folder = args.folder
         options_file = os.path.join(this_run_folder, 'options-and-config.pickle')
         train_options, hidden_config, noise_config = utils.load_options(options_file)
-        checkpoint, loaded_checkpoint_file_name = utils.load_last_checkpoint(os.path.join(this_run_folder, 'checkpoints'))
+        checkpoint, loaded_checkpoint_file_name = utils.load_last_checkpoint(
+            os.path.join(this_run_folder, 'checkpoints'))
         train_options.start_epoch = checkpoint['epoch'] + 1
         if args.out_dir is not None:
-            train_options.output_folder 
+            train_options.output_folder
         if args.data_dir is not None:
             train_options.train_folder = os.path.join(args.data_dir, 'train')
             train_options.validation_folder = os.path.join(args.data_dir, 'val')
@@ -114,15 +121,15 @@ def main():
             runs_folder=os.path.join('.', 'runs'),
             start_epoch=start_epoch,
             experiment_name=args.name,
-            ats = args.ats,
+            ats=args.ats,
             default=args.default,
             beta=args.wbeta,
-            alpha = args.alpha,
-            loss_mode = args.loss,
-            output_folder = args.out_dir)
+            alpha=args.alpha,
+            loss_mode=args.loss,
+            output_folder=args.out_dir)
 
         noise_config = args.noise if args.noise is not None else []
-        hidden_config = HiDDenConfiguration(H=args.size, W=args.size,block_size=args.block_size,
+        hidden_config = HiDDenConfiguration(H=args.size, W=args.size, block_size=args.block_size,
                                             message_length=args.message,
                                             encoder_blocks=4, encoder_channels=64,
                                             decoder_blocks=10, decoder_channels=64,
@@ -132,7 +139,7 @@ def main():
                                             decoder_loss=1,
                                             encoder_loss=0.7,
                                             adversarial_loss=1e-3,
-                                            blocking_loss = 0,
+                                            blocking_loss=0,
                                             enable_fp16=args.enable_fp16
                                             )
 
@@ -142,20 +149,16 @@ def main():
             pickle.dump(noise_config, f)
             pickle.dump(hidden_config, f)
 
-
-    logging.basicConfig(level=logging.INFO,
-                        format='%(message)s',
-                        handlers=[
-                            logging.FileHandler(os.path.join(this_run_folder, f'{train_options.experiment_name}.log')),
-                            logging.StreamHandler(sys.stdout)
-                        ])
-    if (args.command == 'new' and args.tensorboard) or \
-            (args.command == 'continue' and os.path.isdir(os.path.join(this_run_folder, 'tb-logs'))):
-        logging.info('Tensorboard is enabled. Creating logger.')
-        from tensorboard_logger import TensorBoardLogger
-        tb_logger = TensorBoardLogger(os.path.join(this_run_folder, 'tb-logs'))
-    else:
-        tb_logger = None
+    logging.basicConfig = ([
+    ])
+    logging.basicConfig = edict({
+        'level': logging.INFO,
+        'format': '%(message)s',
+        'handlers': {
+            logging.FileHandler(os.path.join(this_run_folder, f'{train_options.experiment_name}.log')),
+            logging.StreamHandler(sys.stdout)
+        }
+    })
 
     noiser = Noiser(noise_config, device)
     model = Hidden(hidden_config, device, noiser, tb_logger)

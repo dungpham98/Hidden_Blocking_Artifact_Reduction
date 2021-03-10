@@ -40,3 +40,4 @@ __pycache__/
 data/
 runs/
 saved-runs/
+.pdf
